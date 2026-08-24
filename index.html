@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Luxury Authenticity — AI-Verified Item Screening</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0708; color: #efe7ec; line-height: 1.5; }
+.container { max-width: 900px; margin: 0 auto; padding: 32px 20px 64px; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+h1 { font-size: 22px; }
+.explorer-link { color: #f0b7c8; text-decoration: none; font-size: 13px; }
+.explorer-link:hover { text-decoration: underline; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.stat { background: #120c0f; border: 1px solid #2a1c22; border-radius: 10px; padding: 14px; }
+.stat .num { font-size: 22px; font-weight: 600; }
+.stat .label { font-size: 11px; color: #8f7b84; margin-top: 4px; }
+.card { background: #120c0f; border: 1px solid #2a1c22; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+.card h2 { font-size: 15px; margin-bottom: 14px; }
+.form-group { margin-bottom: 12px; }
+.form-group label { display: block; font-size: 12px; color: #8f7b84; margin-bottom: 4px; }
+.form-group input { width: 100%; background: #0a0708; border: 1px solid #332230; border-radius: 8px; padding: 10px 12px; color: #efe7ec; font-size: 14px; }
+.form-group input:focus { outline: none; border-color: #f0b7c8; }
+.btn { border: none; border-radius: 8px; padding: 10px 16px; font-size: 14px; cursor: pointer; }
+.btn-primary { background: #e8799b; color: #1a0a10; font-weight: 600; }
+.btn-outline { background: transparent; border: 1px solid #3a2631; color: #d5c3cc; }
+.btn-outline:hover { border-color: #f0b7c8; color: #f0b7c8; }
+.btn-sm { padding: 7px 12px; font-size: 13px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.result-box { margin-top: 12px; font-size: 12px; white-space: pre-wrap; background: #0a0708; padding: 12px; border-radius: 8px; border: 1px solid #2a1c22; word-break: break-all; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; margin-right: 6px; }
+.tag-authentic { background: #123d31; color: #6ee7b7; }
+.tag-counterfeit { background: #3d1111; color: #f87171; }
+.tag-suspicious { background: #3d2a0f; color: #fbbf24; }
+.tag-inconclusive { background: #2a1c22; color: #a58d98; }
+.toast { position: fixed; top: 16px; right: 16px; padding: 12px 18px; border-radius: 8px; font-size: 13px; z-index: 1000; opacity: 0.95; }
+.toast-error { background: #3d1111; color: #f87171; }
+.toast-success { background: #123d31; color: #6ee7b7; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div>
+      <h1>Luxury Authenticity</h1>
+      <div style="font-size:11px;color:#8f7b84;margin-top:4px;">AI-verified item screening · Reusable on-chain records</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <a class="explorer-link" href="https://explorer-bradbury.genlayer.com/address/0x69aD2dFBE1230E0B429D410bcb61Ecd549adBF0e" target="_blank">View on Explorer ↗</a>
+      <button class="btn btn-outline btn-sm" id="connectBtn">Connect Wallet</button>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat"><div class="num" id="statTotal">—</div><div class="label">Total Checks</div></div>
+    <div class="stat"><div class="num" id="statAuthentic">—</div><div class="label">Authentic</div></div>
+    <div class="stat"><div class="num" id="statCounterfeit">—</div><div class="label">Counterfeit</div></div>
+    <div class="stat"><div class="num" id="statSuspicious">—</div><div class="label">Suspicious</div></div>
+    <div class="stat"><div class="num" id="statInconclusive">—</div><div class="label">Inconclusive</div></div>
+    <div class="stat"><div class="num" id="statRecords">—</div><div class="label">Records</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Submit Item Check</h2>
+    <div class="form-group"><label>Brand</label><input id="brand" placeholder="e.g. Rolex"></div>
+    <div class="form-group"><label>Model (optional)</label><input id="model" placeholder="e.g. Submariner"></div>
+    <div class="form-group"><label>Serial Number (4-40 chars)</label><input id="serial" placeholder="e.g. ROLEX00012345"></div>
+    <div class="form-group"><label>Category (optional)</label><input id="category" placeholder="e.g. watch, bag, jewelry"></div>
+    <button class="btn btn-primary" id="submitBtn">Submit Check</button>
+    <div id="submitStatus" style="margin-top:10px;font-size:13px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>Process &amp; View Check</h2>
+    <div class="form-group"><label>Check ID</label><input id="checkId" placeholder="1"></div>
+    <div class="row">
+      <button class="btn btn-outline" id="processBtn">Process Check (AI Review)</button>
+      <button class="btn btn-outline" id="readBtn">Read Result</button>
+    </div>
+    <div id="checkStatus" style="margin-top:10px;font-size:13px;"></div>
+    <div id="checkResult" class="result-box"></div>
+  </div>
+
+  <div class="card">
+    <h2>Lookup Reusable Record</h2>
+    <div class="form-group"><label>Serial Number</label><input id="lookupSerial" placeholder="e.g. ROLEX00012345"></div>
+    <button class="btn btn-outline" id="lookupBtn">Lookup Record</button>
+    <div id="lookupResult" class="result-box"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/ethers@5.7/dist/ethers.umd.min.js"></script>
+<script>
+const CONTRACT = '0x69aD2dFBE1230E0B429D410bcb61Ecd549adBF0e';
+const RPC = 'https://rpc-bradbury.genlayer.com';
+const ABI = [
+  'function submit_item(string brand, string model, string serial, string category)',
+  'function process_item(string item_id)',
+  'function get_item(string item_id) view returns (string)',
+  'function get_record(string serial) view returns (string)',
+  'function get_item_count() view returns (uint256)',
+  'function get_stats() view returns (tuple(uint256 total, uint256 completed, uint256 authentic, uint256 counterfeit, uint256 suspicious, uint256 inconclusive, uint256 records))',
+];
+let contract, account;
+const readProvider = new ethers.providers.JsonRpcProvider(RPC);
+const readContract = new ethers.Contract(CONTRACT, ABI, readProvider);
+
+async function connectWallet() {
+  if (!window.ethereum) return alert('Install MetaMask');
+  await window.ethereum.request({ method: 'eth_requestAccounts' });
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  const signer = provider.getSigner();
+  account = await signer.getAddress();
+  contract = new ethers.Contract(CONTRACT, ABI, signer);
+  return account;
+}
+
+document.getElementById('connectBtn').onclick = async () => {
+  try {
+    const addr = await connectWallet();
+    document.getElementById('connectBtn').textContent = addr.slice(0,6)+'...'+addr.slice(-4);
+    document.getElementById('connectBtn').className = 'btn btn-primary btn-sm';
+    toast('Wallet connected!', 'success');
+  } catch(e) { toast(e.message, 'error'); }
+};
+
+function renderVerdict(jsonStr) {
+  try {
+    const v = JSON.parse(jsonStr);
+    const st = (v.status || 'INCONCLUSIVE').toLowerCase();
+    const badge = '<span class="tag tag-' + st + '">' + (v.status || '') + '</span>';
+    const srcs = v.sources && v.sources.length
+      ? '\nSources:\n  ' + v.sources.map(s => (s.retrieved ? '✓' : '✗') + ' ' + s.url).join('\n  ')
+      : '';
+    return badge + ' Confidence: ' + (v.confidence ?? 0) + '/100' +
+      '\nMatched records: ' + JSON.stringify(v.matched_records) +
+      srcs +
+      '\nReasoning: ' + v.reasoning;
+  } catch(e) { return jsonStr; }
+}
+
+async function loadStats() {
+  try {
+    const s = await readContract.get_stats();
+    document.getElementById('statTotal').textContent = s.total.toString();
+    document.getElementById('statAuthentic').textContent = s.authentic.toString();
+    document.getElementById('statCounterfeit').textContent = s.counterfeit.toString();
+    document.getElementById('statSuspicious').textContent = s.suspicious.toString();
+    document.getElementById('statInconclusive').textContent = s.inconclusive.toString();
+    document.getElementById('statRecords').textContent = s.records.toString();
+  } catch(e) { console.log(e); }
+}
+
+document.getElementById('submitBtn').onclick = async () => {
+  const brand = document.getElementById('brand').value.trim();
+  const model = document.getElementById('model').value.trim();
+  const serial = document.getElementById('serial').value.trim();
+  const category = document.getElementById('category').value.trim();
+  if (!brand || !serial) return toast('Enter brand and serial', 'error');
+  try {
+    if (!contract) await connectWallet();
+    const tx = await contract.submit_item(brand, model || '', serial, category || '');
+    document.getElementById('submitStatus').innerHTML = `<span style="color:#6ee7b7;">Submitted! <a class="explorer-link" href="https://explorer-bradbury.genlayer.com/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a></span>`;
+    await tx.wait();
+    toast('Item check submitted!', 'success');
+    loadStats();
+  } catch(e) { toast(e.reason || e.message, 'error'); }
+};
+
+document.getElementById('processBtn').onclick = async () => {
+  const id = document.getElementById('checkId').value.trim();
+  if (!id) return toast('Enter check ID', 'error');
+  try {
+    if (!contract) await connectWallet();
+    const tx = await contract.process_item(id);
+    document.getElementById('checkStatus').innerHTML = `<span style="color:#6ee7b7;">Processing... <a class="explorer-link" href="https://explorer-bradbury.genlayer.com/tx/${tx.hash}" target="_blank">${tx.hash.slice(0,10)}...</a></span>`;
+    await tx.wait();
+    toast('Item processed! AI validators reached consensus.', 'success');
+    loadStats();
+  } catch(e) { toast(e.reason || e.message, 'error'); }
+};
+
+document.getElementById('readBtn').onclick = async () => {
+  const id = document.getElementById('checkId').value.trim();
+  if (!id) return toast('Enter check ID', 'error');
+  const out = document.getElementById('checkResult');
+  out.textContent = 'Loading from chain...';
+  try {
+    const r = await readContract.get_item(id);
+    const parsed = JSON.parse(r);
+    out.innerHTML = parsed.verdict ? renderVerdict(parsed.verdict) : JSON.stringify(parsed, null, 2);
+  } catch(e) { out.textContent = 'Could not read check: ' + e.message; }
+};
+
+document.getElementById('lookupBtn').onclick = async () => {
+  const serial = document.getElementById('lookupSerial').value.trim();
+  if (!serial) return toast('Enter serial number', 'error');
+  const out = document.getElementById('lookupResult');
+  out.textContent = 'Loading from chain...';
+  try {
+    const r = await readContract.get_record(serial);
+    if (r === '{}') { out.textContent = 'No record for this serial yet.'; return; }
+    out.innerHTML = renderVerdict(r);
+  } catch(e) { out.textContent = 'Could not read record: ' + e.message; }
+};
+
+function toast(msg, type) {
+  const t = document.createElement('div');
+  t.className = 'toast toast-'+type;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 5000);
+}
+
+loadStats();
+</script>
+</body>
+</html>
