@@ -53,10 +53,20 @@ VERDICT_MALFORMED = json.dumps({
 
 LLM_PATTERN = r".*luxury-goods authenticity screening engine.*"
 
+# A successful authoritative source whose body references the serial, so
+# verdicts have at least one serial-specific retrieved source.
+SOURCE_OK = r".*rebag\.com.*"
+SOURCE_BODY = "Entrupy certificate ENT-2024-88 confirms serial " + SERIAL + " is genuine."
+
+
+def with_source(vm, body=SOURCE_BODY):
+    vm.mock_web(SOURCE_OK, {"method": "GET", "status": 200, "body": body})
+
 
 @pytest.fixture
 def la(direct_vm, direct_deploy):
     vm = direct_vm
     vm.mock_llm(LLM_PATTERN, VERDICT_AUTHENTIC)
+    with_source(vm)
     c = direct_deploy(CONTRACT)
     return vm, c

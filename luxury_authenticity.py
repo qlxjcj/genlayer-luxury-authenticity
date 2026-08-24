@@ -54,6 +54,14 @@ class LuxuryAuthenticity(gl.Contract):
     def _authoritative_urls(self, serial: str) -> list:
         return [base + serial for base in self.AUTHORITATIVE_SOURCES]
 
+    def _source_retrieved(self, url: str, body: str, serial: str) -> bool:
+        # A source only counts as retrieved when the response body actually
+        # references this serial, so a generic landing/error page never counts
+        # as serial-specific authenticity evidence.
+        if not body:
+            return False
+        return serial.upper() in body.upper()
+
     def _authenticate(self, brand: str, model: str, serial: str, category: str) -> dict:
         def gather_and_authenticate() -> dict:
             sources = []
@@ -62,8 +70,9 @@ class LuxuryAuthenticity(gl.Contract):
                 try:
                     content = gl.nondet.web.get(url)
                     body = self._decode_body(content)[:1200]
-                    texts.append(f"[{url}]\n{body}")
-                    sources.append({"url": url, "retrieved": True, "excerpt": body[:400]})
+                    retrieved = self._source_retrieved(url, body, serial)
+                    texts.append(f"[{url}] [{'OK' if retrieved else 'NO_SERIAL'}]\n{body}")
+                    sources.append({"url": url, "retrieved": retrieved, "excerpt": body[:400]})
                 except Exception:
                     texts.append(f"[{url}] [FETCH_FAILED]")
                     sources.append({"url": url, "retrieved": False, "excerpt": ""})
@@ -112,9 +121,11 @@ When status is "INCONCLUSIVE", set confidence=0, matched_records=[].
         principle = (
             "Two results are equivalent if status "
             "(AUTHENTIC/COUNTERFEIT/SUSPICIOUS/INCONCLUSIVE) matches exactly, "
-            "confidence values differ by at most 10 points, and matched_records "
-            "contains the same record identifiers (order-insensitive). reasoning "
-            "and sources may differ in wording."
+            "confidence values differ by at most 10 points, matched_records "
+            "contains the same record identifiers (order-insensitive), and "
+            "sources contains the same (url, retrieved) pairs (order-insensitive) "
+            "so validators agree on which authoritative sources were actually "
+            "retrieved for this serial. reasoning and excerpt wording may differ."
         )
         return gl.eq_principle.prompt_comparative(gather_and_authenticate, principle)
 
@@ -193,6 +204,20 @@ When status is "INCONCLUSIVE", set confidence=0, matched_records=[].
         verdict = self._normalize_verdict(
             self._authenticate(item["brand"], item["model"], item["serial"], item["category"])
         )
+
+        # Hard source requirement: if no authoritative source was successfully
+        # retrieved for this serial, force INCONCLUSIVE regardless of what the
+        # LLM returned. An AUTHENTIC verdict must rest on serial-specific
+        # evidence, not on generic page responses or empty results.
+        if not any(s.get("retrieved") for s in verdict.get("sources", [])):
+            forced = {
+                "status": "INCONCLUSIVE",
+                "confidence": 0,
+                "matched_records": [],
+                "reasoning": "No authoritative serial-specific source could be retrieved; verdict forced to INCONCLUSIVE.",
+                "sources": verdict.get("sources", []),
+            }
+            verdict = self._normalize_verdict(forced)
 
         # Reusable record is keyed by normalized serial. Guard against an unrelated
         # caller (or a serial collision with a different brand) silently replacing

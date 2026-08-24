@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Luxury Authenticity — AI-Verified Item Screening</title>
+<title>Luxury Authenticity â€” AI-Verified Item Screening</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0708; color: #efe7ec; line-height: 1.5; }
@@ -44,21 +44,21 @@ h1 { font-size: 22px; }
   <div class="header">
     <div>
       <h1>Luxury Authenticity</h1>
-      <div style="font-size:11px;color:#8f7b84;margin-top:4px;">AI-verified item screening · Reusable on-chain records</div>
+      <div style="font-size:11px;color:#8f7b84;margin-top:4px;">AI-verified item screening Â· Reusable on-chain records</div>
     </div>
     <div style="display:flex;gap:10px;align-items:center;">
-      <a class="explorer-link" href="https://explorer-bradbury.genlayer.com/address/0x69aD2dFBE1230E0B429D410bcb61Ecd549adBF0e" target="_blank">View on Explorer ↗</a>
+      <a class="explorer-link" href="https://explorer-bradbury.genlayer.com/address/0xCCAC3fB6A9a459E94a7043A3635d7e42a17e639B" target="_blank">View on Explorer â†—</a>
       <button class="btn btn-outline btn-sm" id="connectBtn">Connect Wallet</button>
     </div>
   </div>
 
   <div class="stats-grid">
-    <div class="stat"><div class="num" id="statTotal">—</div><div class="label">Total Checks</div></div>
-    <div class="stat"><div class="num" id="statAuthentic">—</div><div class="label">Authentic</div></div>
-    <div class="stat"><div class="num" id="statCounterfeit">—</div><div class="label">Counterfeit</div></div>
-    <div class="stat"><div class="num" id="statSuspicious">—</div><div class="label">Suspicious</div></div>
-    <div class="stat"><div class="num" id="statInconclusive">—</div><div class="label">Inconclusive</div></div>
-    <div class="stat"><div class="num" id="statRecords">—</div><div class="label">Records</div></div>
+    <div class="stat"><div class="num" id="statTotal">â€”</div><div class="label">Total Checks</div></div>
+    <div class="stat"><div class="num" id="statAuthentic">â€”</div><div class="label">Authentic</div></div>
+    <div class="stat"><div class="num" id="statCounterfeit">â€”</div><div class="label">Counterfeit</div></div>
+    <div class="stat"><div class="num" id="statSuspicious">â€”</div><div class="label">Suspicious</div></div>
+    <div class="stat"><div class="num" id="statInconclusive">â€”</div><div class="label">Inconclusive</div></div>
+    <div class="stat"><div class="num" id="statRecords">â€”</div><div class="label">Records</div></div>
   </div>
 
   <div class="card">
@@ -92,7 +92,7 @@ h1 { font-size: 22px; }
 
 <script src="https://cdn.jsdelivr.net/npm/ethers@5.7/dist/ethers.umd.min.js"></script>
 <script>
-const CONTRACT = '0x69aD2dFBE1230E0B429D410bcb61Ecd549adBF0e';
+const CONTRACT = '0xCCAC3fB6A9a459E94a7043A3635d7e42a17e639B';
 const RPC = 'https://rpc-bradbury.genlayer.com';
 const ABI = [
   'function submit_item(string brand, string model, string serial, string category)',
@@ -131,7 +131,7 @@ function renderVerdict(jsonStr) {
     const st = (v.status || 'INCONCLUSIVE').toLowerCase();
     const badge = '<span class="tag tag-' + st + '">' + (v.status || '') + '</span>';
     const srcs = v.sources && v.sources.length
-      ? '\nSources:\n  ' + v.sources.map(s => (s.retrieved ? '✓' : '✗') + ' ' + s.url).join('\n  ')
+      ? '\nSources:\n  ' + v.sources.map(s => (s.retrieved ? 'âœ“' : 'âœ—') + ' ' + s.url).join('\n  ')
       : '';
     return badge + ' Confidence: ' + (v.confidence ?? 0) + '/100' +
       '\nMatched records: ' + JSON.stringify(v.matched_records) +

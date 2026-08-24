@@ -21,6 +21,7 @@ from conftest import (
     VERDICT_MALFORMED,
     VERDICT_SUSPICIOUS,
     LLM_PATTERN,
+    with_source,
 )
 
 
@@ -97,6 +98,7 @@ def test_process_counterfeit(direct_vm, la):
     vm, c = la
     vm.clear_mocks()
     vm.mock_llm(LLM_PATTERN, VERDICT_COUNTERFEIT)
+    with_source(vm)
     c.submit_item("Rolex", "Submariner", SERIAL, "watch")
     c.process_item(1)
 
@@ -109,6 +111,7 @@ def test_process_suspicious(direct_vm, la):
     vm, c = la
     vm.clear_mocks()
     vm.mock_llm(LLM_PATTERN, VERDICT_SUSPICIOUS)
+    with_source(vm)
     c.submit_item("Rolex", "Submariner", SERIAL, "watch")
     c.process_item(1)
 
@@ -132,26 +135,37 @@ def test_record_queries_authoritative_sources(direct_vm, la):
     assert any("ebay.com" in u for u in urls)               # eBay listings
     assert len(urls) == 4
     assert SERIAL.upper() in urls[0]
-    # no source mocked -> all retrieval attempts recorded as failed
-    assert all(s["retrieved"] is False for s in rec["sources"])
-    assert all(s["excerpt"] == "" for s in rec["sources"])
+    # fixture mocks rebag.com (body references the serial) as retrieved; the
+    # others either failed or returned a non-serial body -> recorded as not retrieved.
+    rebag = next(s for s in rec["sources"] if "rebag.com" in s["url"])
+    assert rebag["retrieved"] is True
+    assert all(s["retrieved"] is False for s in rec["sources"] if "rebag.com" not in s["url"])
 
 
 def test_record_preserves_retrieval_details(direct_vm, la):
     vm, c = la
-    vm.mock_web(r".*rebag\.com.*", {
-        "method": "GET", "status": 200,
-        "body": "Entrupy certificate ENT-2024-88 confirms this serial is genuine.",
-    })
     c.submit_item("Rolex", "Submariner", SERIAL, "watch")
     c.process_item(1)
 
     rec = _record(c, SERIAL)
     rebag = next(s for s in rec["sources"] if "rebag.com" in s["url"])
     assert rebag["retrieved"] is True
-    assert "genuine" in rebag["excerpt"]
-    others = [s for s in rec["sources"] if "rebag.com" not in s["url"]]
-    assert all(s["retrieved"] is False for s in others)
+    assert SERIAL in rebag["excerpt"]
+
+
+def test_generic_page_without_serial_does_not_count_as_retrieved(direct_vm, la):
+    vm, c = la
+    vm.clear_mocks()
+    vm.mock_llm(LLM_PATTERN, VERDICT_AUTHENTIC)
+    # A 200 response whose body does NOT mention the serial must not count as a
+    # retrieved serial-specific source -> hard source requirement forces INCONCLUSIVE.
+    vm.mock_web(r".*rebag\.com.*", {"method": "GET", "status": 200, "body": "Welcome to Rebag. Authenticate your item here."})
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.process_item(1)
+
+    v = _verdict(c, 1)
+    assert v["status"] == "INCONCLUSIVE"
+    assert all(s["retrieved"] is False for s in v["sources"])
 
 
 # ---------- explicit inconclusive ----------
@@ -170,12 +184,40 @@ def test_inconclusive_explicit(direct_vm, la):
     assert _record(c, SERIAL)["status"] == "INCONCLUSIVE"
 
 
+# ---------- hard source requirement ----------
+
+def test_no_source_forces_inconclusive(direct_vm, la):
+    # LLM says AUTHENTIC but no authoritative source was retrieved -> forced INCONCLUSIVE.
+    vm, c = la
+    vm.clear_mocks()
+    vm.mock_llm(LLM_PATTERN, VERDICT_AUTHENTIC)
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.process_item(1)
+
+    v = _verdict(c, 1)
+    assert v["status"] == "INCONCLUSIVE"
+    assert v["confidence"] == 0
+    assert v["matched_records"] == []
+    assert "INCONCLUSIVE" in v["reasoning"]
+    assert all(s["retrieved"] is False for s in v["sources"])
+
+
+def test_no_source_forces_inconclusive_for_counterfeit(direct_vm, la):
+    vm, c = la
+    vm.clear_mocks()
+    vm.mock_llm(LLM_PATTERN, VERDICT_COUNTERFEIT)
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.process_item(1)
+    assert _verdict(c, 1)["status"] == "INCONCLUSIVE"
+
+
 # ---------- verdict normalization ----------
 
 def test_verdict_normalized(direct_vm, la):
     vm, c = la
     vm.clear_mocks()
     vm.mock_llm(LLM_PATTERN, VERDICT_MALFORMED)
+    with_source(vm)
     c.submit_item("Rolex", "Submariner", SERIAL, "watch")
     c.process_item(1)
 
@@ -191,6 +233,7 @@ def test_confidence_clamped_upper(direct_vm, la):
     vm.mock_llm(LLM_PATTERN, json.dumps({
         "status": "AUTHENTIC", "confidence": 150, "matched_records": [], "reasoning": "x",
     }))
+    with_source(vm)
     c.submit_item("Rolex", "Submariner", SERIAL, "watch")
     c.process_item(1)
     assert _verdict(c, 1)["confidence"] == 100
@@ -271,6 +314,7 @@ def test_inconclusive_record_can_be_improved_by_anyone(direct_vm, la, direct_bob
     vm.sender = direct_bob
     vm.clear_mocks()
     vm.mock_llm(LLM_PATTERN, VERDICT_COUNTERFEIT)
+    with_source(vm)
     c.submit_item("Rolex", "Submariner", SERIAL, "watch")
     c.process_item(2)
     rec = _record(c, SERIAL)
@@ -306,11 +350,13 @@ def test_stats_counts_statuses(direct_vm, la):
 
     vm.clear_mocks()
     vm.mock_llm(LLM_PATTERN, VERDICT_COUNTERFEIT)
+    vm.mock_web(r".*rebag\.com.*", {"method": "GET", "status": 200, "body": "Rebag flag for HERMES00012345."})
     c.submit_item("Hermes", "Birkin", "HERMES00012345", "bag")
     c.process_item(2)
 
     vm.clear_mocks()
     vm.mock_llm(LLM_PATTERN, VERDICT_SUSPICIOUS)
+    vm.mock_web(r".*rebag\.com.*", {"method": "GET", "status": 200, "body": "Vestiaire dispute for CHANEL00012345."})
     c.submit_item("Chanel", "Classic", "CHANEL00012345", "bag")
     c.process_item(3)
 

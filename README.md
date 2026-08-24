@@ -28,7 +28,10 @@ on-chain (4-40 characters, valid charset, normalized uppercase).
 ## Explicit inconclusive results
 
 A verdict is never silently "authentic": the AI must return an explicit `status`
-of `AUTHENTIC`, `COUNTERFEIT`, `SUSPICIOUS`, or `INCONCLUSIVE`. When no
+of `AUTHENTIC`, `COUNTERFEIT`, `SUSPICIOUS`, or `INCONCLUSIVE`. A source only
+counts as `retrieved=True` when its response body actually references this
+serial, so a generic landing/error page never counts as serial-specific
+evidence. When no
 authoritative source yields usable content, the check returns `INCONCLUSIVE` —
 stored, surfaced, and counted separately in stats — rather than guessing a false
 "authentic".
@@ -38,9 +41,17 @@ stored, surfaced, and counted separately in stats — rather than guessing a fal
 `gl.nondet.web.get` gathers the live source content and
 `gl.eq_principle.prompt_comparative` binds the decision outputs — `status`
 (AUTHENTIC/COUNTERFEIT/SUSPICIOUS/INCONCLUSIVE), `confidence` (0-100, validators
-must agree within 10 points), and `matched_records` (order-insensitive) — so
-validators cannot drift on the verdict. `reasoning` and `sources` may differ in
-wording. Every verdict is normalized before storage.
+must agree within 10 points), `matched_records` (order-insensitive), and
+`sources` (url + retrieved pairs, order-insensitive) so validators agree on
+which authoritative sources were actually retrieved for this serial. `reasoning`
+and excerpt wording may differ. Every verdict is normalized before storage.
+
+## Hard source requirement
+
+If no authoritative source was successfully retrieved for this serial, the
+verdict is forced to `INCONCLUSIVE` in contract logic regardless of what the LLM
+returned. An `AUTHENTIC` verdict must rest on serial-specific evidence, not on
+generic page responses or empty results.
 
 ## Record ownership & collision guard
 
@@ -72,7 +83,7 @@ clamp), reusable caching, ownership/collision guards, state guards, and stats.
 
 ## Live
 
-- Contract: `0x69aD2dFBE1230E0B429D410bcb61Ecd549adBF0e`
-- Explorer: https://explorer-bradbury.genlayer.com/address/0x69aD2dFBE1230E0B429D410bcb61Ecd549adBF0e
+- Contract: `0xCCAC3fB6A9a459E94a7043A3635d7e42a17e639B`
+- Explorer: https://explorer-bradbury.genlayer.com/address/0xCCAC3fB6A9a459E94a7043A3635d7e42a17e639B
 - Deploy tx: `0x1cdc2759dbd23c1c428a302a3e08a58f8ee8876d74c748dbdacf94003293e5c6`
 - Frontend: https://qlxjcj.github.io/genlayer-luxury-authenticity/
