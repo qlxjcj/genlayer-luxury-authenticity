@@ -58,9 +58,15 @@ LLM_PATTERN = r".*luxury-goods authenticity screening engine.*"
 SOURCE_OK = r".*rebag\.com.*"
 SOURCE_BODY = "Entrupy certificate ENT-2024-88 confirms serial " + SERIAL + " is genuine."
 
+# Submitter-provided evidence URL tying the serial to a physical item.
+EVIDENCE_URL = "https://evidence.example.com/item/" + SERIAL
+EVIDENCE_BODY = "Physical item evidence for serial " + SERIAL + ". Rolex Submariner watch photos."
+EVIDENCE_PATTERN = r".*evidence\.example\.com.*"
 
-def with_source(vm, body=SOURCE_BODY):
+
+def with_source(vm, body=SOURCE_BODY, evidence_body=EVIDENCE_BODY):
     vm.mock_web(SOURCE_OK, {"method": "GET", "status": 200, "body": body})
+    vm.mock_web(EVIDENCE_PATTERN, {"method": "GET", "status": 200, "body": evidence_body})
 
 
 @pytest.fixture

@@ -13,6 +13,7 @@ class Item:
     model: str
     serial: str
     category: str
+    evidence_url: str
     status: str
     verdict: str
 
@@ -62,10 +63,24 @@ class LuxuryAuthenticity(gl.Contract):
             return False
         return serial.upper() in body.upper()
 
-    def _authenticate(self, brand: str, model: str, serial: str, category: str) -> dict:
+    def _authenticate(self, brand: str, model: str, serial: str, category: str, evidence_url: str) -> dict:
         def gather_and_authenticate() -> dict:
             sources = []
             texts = []
+
+            # Fetch submitter-provided evidence URL and check it references the
+            # serial, tying the serial to a physical item (photo listing,
+            # marketplace listing, or certificate scan).
+            evidence_retrieved = False
+            evidence_body = ""
+            try:
+                content = gl.nondet.web.get(evidence_url)
+                evidence_body = self._decode_body(content)[:1200]
+                evidence_retrieved = self._source_retrieved(evidence_url, evidence_body, serial)
+            except Exception:
+                pass
+            texts.append(f"[EVIDENCE] {evidence_url} [{'OK' if evidence_retrieved else 'NO_SERIAL'}]\n{evidence_body}")
+
             for url in self._authoritative_urls(serial):
                 try:
                     content = gl.nondet.web.get(url)
@@ -84,14 +99,20 @@ records, Vestiaire Collective resale listings, eBay listings), which were querie
 for this serial number. Cross-reference them for counterfeits, disputed items,
 or indications that the piece is genuine.
 
-If NO source was retrieved, or the retrieved sources do not cover this serial, you
-MUST return status "INCONCLUSIVE" — never report an item as authentic without
-evidence.
+The EVIDENCE URL was provided by the submitter to tie this serial to a physical
+item (photo listing, marketplace listing, or certificate scan). If the evidence
+does NOT reference this serial, the serial is not tied to a physical item and
+you MUST return status "INCONCLUSIVE".
+
+If NO authoritative source was retrieved, or the retrieved sources do not cover
+this serial, you MUST return status "INCONCLUSIVE" — never report an item as
+authentic without evidence.
 
 BRAND: {brand or "[none provided]"}
 MODEL: {model or "[none provided]"}
 SERIAL: {serial}
 CATEGORY: {category or "[none provided]"}
+EVIDENCE URL: {evidence_url}
 
 SOURCES:
 {chr(10).join(texts) if texts else "[none]"}
@@ -116,16 +137,20 @@ When status is "INCONCLUSIVE", set confidence=0, matched_records=[].
             if not isinstance(result, dict):
                 raise gl.vm.UserError("[LLM_ERROR] LLM returned non-dict result")
             result["sources"] = sources
+            result["evidence_url"] = evidence_url
+            result["evidence_retrieved"] = evidence_retrieved
             return result
 
         principle = (
             "Two results are equivalent if status "
             "(AUTHENTIC/COUNTERFEIT/SUSPICIOUS/INCONCLUSIVE) matches exactly, "
             "confidence values differ by at most 10 points, matched_records "
-            "contains the same record identifiers (order-insensitive), and "
+            "contains the same record identifiers (order-insensitive), "
             "sources contains the same (url, retrieved) pairs (order-insensitive) "
             "so validators agree on which authoritative sources were actually "
-            "retrieved for this serial. reasoning and excerpt wording may differ."
+            "retrieved for this serial, and evidence_retrieved matches exactly "
+            "so validators agree on whether the serial was tied to physical item "
+            "evidence. reasoning and excerpt wording may differ."
         )
         return gl.eq_principle.prompt_comparative(gather_and_authenticate, principle)
 
@@ -163,19 +188,27 @@ When status is "INCONCLUSIVE", set confidence=0, matched_records=[].
                 "excerpt": str(s.get("excerpt", ""))[:400],
             })
 
+        evidence_url = str(v.get("evidence_url", ""))
+        evidence_retrieved = bool(v.get("evidence_retrieved", False))
+
         return {
             "status": status,
             "confidence": confidence,
             "matched_records": matched,
             "sources": norm_sources,
+            "evidence_url": evidence_url,
+            "evidence_retrieved": evidence_retrieved,
             "reasoning": str(v.get("reasoning", "")),
         }
 
     @gl.public.write
-    def submit_item(self, brand: str, model: str, serial: str, category: str):
+    def submit_item(self, brand: str, model: str, serial: str, category: str, evidence_url: str):
         serial = self._valid_serial(serial)
         if not brand or not brand.strip():
             raise gl.vm.UserError("Brand is required")
+        evidence_url = (evidence_url or "").strip()
+        if not evidence_url or not (evidence_url.startswith("http://") or evidence_url.startswith("https://")):
+            raise gl.vm.UserError("A valid evidence URL (http/https) is required to tie the serial to the physical item")
         sender = gl.message.sender_address
         self.item_count += 1
         item_id = str(self.item_count)
@@ -187,6 +220,7 @@ When status is "INCONCLUSIVE", set confidence=0, matched_records=[].
             model=str(model or "").strip(),
             serial=serial,
             category=str(category or "").strip(),
+            evidence_url=evidence_url,
             status="PENDING",
             verdict="",
         )
@@ -202,20 +236,25 @@ When status is "INCONCLUSIVE", set confidence=0, matched_records=[].
             raise gl.vm.UserError("Already processed")
 
         verdict = self._normalize_verdict(
-            self._authenticate(item["brand"], item["model"], item["serial"], item["category"])
+            self._authenticate(item["brand"], item["model"], item["serial"], item["category"], item["evidence_url"])
         )
 
+        # Evidence requirement: the serial must be tied to a physical item via
+        # the submitter-provided evidence URL. If the evidence was not retrieved
+        # (fetch failed or body doesn't reference this serial), force INCONCLUSIVE.
         # Hard source requirement: if no authoritative source was successfully
         # retrieved for this serial, force INCONCLUSIVE regardless of what the
         # LLM returned. An AUTHENTIC verdict must rest on serial-specific
         # evidence, not on generic page responses or empty results.
-        if not any(s.get("retrieved") for s in verdict.get("sources", [])):
+        if not verdict.get("evidence_retrieved") or not any(s.get("retrieved") for s in verdict.get("sources", [])):
             forced = {
                 "status": "INCONCLUSIVE",
                 "confidence": 0,
                 "matched_records": [],
-                "reasoning": "No authoritative serial-specific source could be retrieved; verdict forced to INCONCLUSIVE.",
+                "reasoning": "No authenticated item evidence or serial-specific source could be retrieved; verdict forced to INCONCLUSIVE.",
                 "sources": verdict.get("sources", []),
+                "evidence_url": verdict.get("evidence_url", ""),
+                "evidence_retrieved": verdict.get("evidence_retrieved", False),
             }
             verdict = self._normalize_verdict(forced)
 

@@ -53,6 +53,16 @@ verdict is forced to `INCONCLUSIVE` in contract logic regardless of what the LLM
 returned. An `AUTHENTIC` verdict must rest on serial-specific evidence, not on
 generic page responses or empty results.
 
+## Physical item evidence binding
+
+Every `submit_item` call requires an `evidence_url` — a submitter-provided URL
+(photo listing, marketplace listing, or certificate scan) that ties the serial to
+a real physical item. Validators fetch this URL during consensus and verify the
+response body references the serial. If the evidence is not retrieved or does not
+contain the serial, the verdict is forced to `INCONCLUSIVE` — the serial is not
+considered tied to a physical item. The record stores both `evidence_url` and
+`evidence_retrieved` so it is bound to authenticated item evidence.
+
 ## Record ownership & collision guard
 
 The reusable record is keyed by the normalized serial and stores full identity
@@ -83,7 +93,7 @@ clamp), reusable caching, ownership/collision guards, state guards, and stats.
 
 ## Live
 
-- Contract: `0xCCAC3fB6A9a459E94a7043A3635d7e42a17e639B`
-- Explorer: https://explorer-bradbury.genlayer.com/address/0xCCAC3fB6A9a459E94a7043A3635d7e42a17e639B
+- Contract: `0xDee8F8624A7d54490BAb0c0dB262E0846152492B`
+- Explorer: https://explorer-bradbury.genlayer.com/address/0xDee8F8624A7d54490BAb0c0dB262E0846152492B
 - Deploy tx: `0x1cdc2759dbd23c1c428a302a3e08a58f8ee8876d74c748dbdacf94003293e5c6`
 - Frontend: https://qlxjcj.github.io/genlayer-luxury-authenticity/

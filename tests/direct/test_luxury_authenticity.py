@@ -15,6 +15,7 @@ import pytest
 
 from conftest import (
     SERIAL,
+    EVIDENCE_URL,
     VERDICT_AUTHENTIC,
     VERDICT_COUNTERFEIT,
     VERDICT_INCONCLUSIVE,
@@ -41,7 +42,7 @@ def _record(c, serial):
 
 def test_submit_creates_pending_check(direct_vm, la):
     vm, c = la
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
 
     assert c.get_item_count() == 1
     r = _check(c, 1)
@@ -54,36 +55,50 @@ def test_submit_creates_pending_check(direct_vm, la):
 
 def test_submit_normalizes_serial_case(direct_vm, la):
     vm, c = la
-    c.submit_item("Rolex", "Submariner", "rolex00012345", "watch")
+    c.submit_item("Rolex", "Submariner", "rolex00012345", "watch", EVIDENCE_URL)
     assert _check(c, 1)["serial"] == SERIAL.upper()
 
 
 def test_submit_rejects_short_serial(direct_vm, la):
     vm, c = la
     with pytest.raises(Exception) as ei:
-        c.submit_item("Rolex", "Submariner", "RO", "watch")
+        c.submit_item("Rolex", "Submariner", "RO", "watch", EVIDENCE_URL)
     assert "4-40" in str(ei.value)
 
 
 def test_submit_rejects_bad_serial_chars(direct_vm, la):
     vm, c = la
     with pytest.raises(Exception) as ei:
-        c.submit_item("Rolex", "Submariner", "ROLEX_00012345", "watch")
+        c.submit_item("Rolex", "Submariner", "ROLEX_00012345", "watch", EVIDENCE_URL)
     assert "invalid" in str(ei.value).lower()
 
 
 def test_submit_rejects_missing_brand(direct_vm, la):
     vm, c = la
     with pytest.raises(Exception) as ei:
-        c.submit_item("   ", "Submariner", SERIAL, "watch")
+        c.submit_item("   ", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     assert "Brand" in str(ei.value)
+
+
+def test_submit_rejects_missing_evidence_url(direct_vm, la):
+    vm, c = la
+    with pytest.raises(Exception) as ei:
+        c.submit_item("Rolex", "Submariner", SERIAL, "watch", "")
+    assert "evidence" in str(ei.value).lower()
+
+
+def test_submit_rejects_invalid_evidence_url(direct_vm, la):
+    vm, c = la
+    with pytest.raises(Exception) as ei:
+        c.submit_item("Rolex", "Submariner", SERIAL, "watch", "ftp://example.com/photo")
+    assert "evidence" in str(ei.value).lower()
 
 
 # ---------- process: statuses ----------
 
 def test_process_authentic(direct_vm, la):
     vm, c = la
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
 
     r = _check(c, 1)
@@ -99,7 +114,7 @@ def test_process_counterfeit(direct_vm, la):
     vm.clear_mocks()
     vm.mock_llm(LLM_PATTERN, VERDICT_COUNTERFEIT)
     with_source(vm)
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
 
     v = _verdict(c, 1)
@@ -112,7 +127,7 @@ def test_process_suspicious(direct_vm, la):
     vm.clear_mocks()
     vm.mock_llm(LLM_PATTERN, VERDICT_SUSPICIOUS)
     with_source(vm)
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
 
     v = _verdict(c, 1)
@@ -124,7 +139,7 @@ def test_process_suspicious(direct_vm, la):
 
 def test_record_queries_authoritative_sources(direct_vm, la):
     vm, c = la
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
 
     rec = _record(c, SERIAL)
@@ -144,7 +159,7 @@ def test_record_queries_authoritative_sources(direct_vm, la):
 
 def test_record_preserves_retrieval_details(direct_vm, la):
     vm, c = la
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
 
     rec = _record(c, SERIAL)
@@ -160,12 +175,16 @@ def test_generic_page_without_serial_does_not_count_as_retrieved(direct_vm, la):
     # A 200 response whose body does NOT mention the serial must not count as a
     # retrieved serial-specific source -> hard source requirement forces INCONCLUSIVE.
     vm.mock_web(r".*rebag\.com.*", {"method": "GET", "status": 200, "body": "Welcome to Rebag. Authenticate your item here."})
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    # Evidence URL DOES contain the serial (evidence_retrieved=True), isolating
+    # the source check: even with valid evidence, no authoritative source -> INCONCLUSIVE.
+    vm.mock_web(r".*evidence\.example\.com.*", {"method": "GET", "status": 200, "body": "Evidence for " + SERIAL + "."})
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
 
     v = _verdict(c, 1)
     assert v["status"] == "INCONCLUSIVE"
     assert all(s["retrieved"] is False for s in v["sources"])
+    assert v["evidence_retrieved"] is True
 
 
 # ---------- explicit inconclusive ----------
@@ -174,7 +193,7 @@ def test_inconclusive_explicit(direct_vm, la):
     vm, c = la
     vm.clear_mocks()
     vm.mock_llm(LLM_PATTERN, VERDICT_INCONCLUSIVE)
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
 
     v = _verdict(c, 1)
@@ -191,7 +210,7 @@ def test_no_source_forces_inconclusive(direct_vm, la):
     vm, c = la
     vm.clear_mocks()
     vm.mock_llm(LLM_PATTERN, VERDICT_AUTHENTIC)
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
 
     v = _verdict(c, 1)
@@ -206,9 +225,37 @@ def test_no_source_forces_inconclusive_for_counterfeit(direct_vm, la):
     vm, c = la
     vm.clear_mocks()
     vm.mock_llm(LLM_PATTERN, VERDICT_COUNTERFEIT)
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
     assert _verdict(c, 1)["status"] == "INCONCLUSIVE"
+
+
+# ---------- evidence requirement ----------
+
+def test_no_evidence_forces_inconclusive(direct_vm, la):
+    # Evidence URL returns a body WITHOUT the serial -> serial not tied to a
+    # physical item -> forced INCONCLUSIVE even if an authoritative source has it.
+    vm, c = la
+    vm.clear_mocks()
+    vm.mock_llm(LLM_PATTERN, VERDICT_AUTHENTIC)
+    vm.mock_web(r".*rebag\.com.*", {"method": "GET", "status": 200, "body": "Entrupy certificate confirms serial " + SERIAL + " is genuine."})
+    vm.mock_web(r".*evidence\.example\.com.*", {"method": "GET", "status": 200, "body": "Generic photo page. No serial visible."})
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
+    c.process_item(1)
+
+    v = _verdict(c, 1)
+    assert v["status"] == "INCONCLUSIVE"
+    assert v["evidence_retrieved"] is False
+
+
+def test_record_stores_evidence_binding(direct_vm, la):
+    vm, c = la
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
+    c.process_item(1)
+
+    rec = _record(c, SERIAL)
+    assert rec["evidence_url"] == EVIDENCE_URL
+    assert rec["evidence_retrieved"] is True
 
 
 # ---------- verdict normalization ----------
@@ -218,7 +265,7 @@ def test_verdict_normalized(direct_vm, la):
     vm.clear_mocks()
     vm.mock_llm(LLM_PATTERN, VERDICT_MALFORMED)
     with_source(vm)
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
 
     v = _verdict(c, 1)
@@ -234,7 +281,7 @@ def test_confidence_clamped_upper(direct_vm, la):
         "status": "AUTHENTIC", "confidence": 150, "matched_records": [], "reasoning": "x",
     }))
     with_source(vm)
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
     assert _verdict(c, 1)["confidence"] == 100
 
@@ -243,7 +290,7 @@ def test_confidence_clamped_upper(direct_vm, la):
 
 def test_record_cached_and_case_insensitive(direct_vm, la):
     vm, c = la
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
 
     rec = _record(c, SERIAL)
@@ -264,12 +311,12 @@ def test_get_record_unknown(direct_vm, la):
 
 def test_unrelated_caller_cannot_replace_record(direct_vm, la, direct_bob):
     vm, c = la
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
     owner = _record(c, SERIAL)["requester"]
 
     vm.sender = direct_bob
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     with pytest.raises(Exception) as ei:
         c.process_item(2)
     assert "settled by another requester" in str(ei.value).lower()
@@ -281,12 +328,12 @@ def test_unrelated_caller_cannot_replace_record(direct_vm, la, direct_bob):
 
 def test_serial_collision_with_different_brand_rejected(direct_vm, la, direct_bob):
     vm, c = la
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
 
     # same serial, different brand, unrelated caller -> rejected, not overwritten
     vm.sender = direct_bob
-    c.submit_item("Hermes", "Birkin", SERIAL, "bag")
+    c.submit_item("Hermes", "Birkin", SERIAL, "bag", EVIDENCE_URL)
     with pytest.raises(Exception) as ei:
         c.process_item(2)
     assert "settled" in str(ei.value).lower()
@@ -295,10 +342,10 @@ def test_serial_collision_with_different_brand_rejected(direct_vm, la, direct_bo
 
 def test_same_requester_can_refresh_record(direct_vm, la):
     vm, c = la
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
 
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(2)
     assert _record(c, SERIAL)["from_check"] == "2"
 
@@ -307,7 +354,7 @@ def test_inconclusive_record_can_be_improved_by_anyone(direct_vm, la, direct_bob
     vm, c = la
     vm.clear_mocks()
     vm.mock_llm(LLM_PATTERN, VERDICT_INCONCLUSIVE)
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
     assert _record(c, SERIAL)["status"] == "INCONCLUSIVE"
 
@@ -315,7 +362,7 @@ def test_inconclusive_record_can_be_improved_by_anyone(direct_vm, la, direct_bob
     vm.clear_mocks()
     vm.mock_llm(LLM_PATTERN, VERDICT_COUNTERFEIT)
     with_source(vm)
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(2)
     rec = _record(c, SERIAL)
     assert rec["status"] == "COUNTERFEIT"
@@ -326,7 +373,7 @@ def test_inconclusive_record_can_be_improved_by_anyone(direct_vm, la, direct_bob
 
 def test_process_twice_blocked(direct_vm, la):
     vm, c = la
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
 
     with pytest.raises(Exception) as ei:
@@ -345,24 +392,26 @@ def test_process_not_found(direct_vm, la):
 
 def test_stats_counts_statuses(direct_vm, la):
     vm, c = la
-    c.submit_item("Rolex", "Submariner", SERIAL, "watch")
+    c.submit_item("Rolex", "Submariner", SERIAL, "watch", EVIDENCE_URL)
     c.process_item(1)
 
     vm.clear_mocks()
     vm.mock_llm(LLM_PATTERN, VERDICT_COUNTERFEIT)
     vm.mock_web(r".*rebag\.com.*", {"method": "GET", "status": 200, "body": "Rebag flag for HERMES00012345."})
-    c.submit_item("Hermes", "Birkin", "HERMES00012345", "bag")
+    vm.mock_web(r".*evidence\.example\.com.*", {"method": "GET", "status": 200, "body": "Evidence for HERMES00012345."})
+    c.submit_item("Hermes", "Birkin", "HERMES00012345", "bag", "https://evidence.example.com/item/HERMES00012345")
     c.process_item(2)
 
     vm.clear_mocks()
     vm.mock_llm(LLM_PATTERN, VERDICT_SUSPICIOUS)
     vm.mock_web(r".*rebag\.com.*", {"method": "GET", "status": 200, "body": "Vestiaire dispute for CHANEL00012345."})
-    c.submit_item("Chanel", "Classic", "CHANEL00012345", "bag")
+    vm.mock_web(r".*evidence\.example\.com.*", {"method": "GET", "status": 200, "body": "Evidence for CHANEL00012345."})
+    c.submit_item("Chanel", "Classic", "CHANEL00012345", "bag", "https://evidence.example.com/item/CHANEL00012345")
     c.process_item(3)
 
     vm.clear_mocks()
     vm.mock_llm(LLM_PATTERN, VERDICT_INCONCLUSIVE)
-    c.submit_item("Gucci", "Marmont", "GUCCI00012345", "bag")
+    c.submit_item("Gucci", "Marmont", "GUCCI00012345", "bag", "https://evidence.example.com/item/GUCCI00012345")
     c.process_item(4)
 
     s = c.get_stats()
