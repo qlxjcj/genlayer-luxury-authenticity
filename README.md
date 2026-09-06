@@ -20,7 +20,7 @@ get_record(serial)    # reusable record (serial key, case-insensitive)
 Every check queries four authoritative authentication / resale sources built from
 the serial number — **Entrupy** AI authentication, **Rebag** authenticity records,
 **Vestiaire Collective** resale listings, and **eBay** listings — via
-`gl.nondet.web.get`. Each source's URL, retrieval success, and a content excerpt
+`gl.nondet.web.render`. Each source's URL, retrieval success, and a content excerpt
 are preserved in the verdict and reusable record, so the evidence behind an
 authenticity claim is auditable on-chain (see `sources[]`). Serials are validated
 on-chain (4-40 characters, valid charset, normalized uppercase).
@@ -38,7 +38,7 @@ stored, surfaced, and counted separately in stats — rather than guessing a fal
 
 ## Consensus binding
 
-`gl.nondet.web.get` gathers the live source content and
+`gl.nondet.web.render` gathers the live source content and
 `gl.eq_principle.prompt_comparative` binds the decision outputs — `status`
 (AUTHENTIC/COUNTERFEIT/SUSPICIOUS/INCONCLUSIVE), `confidence` (0-100, validators
 must agree within 10 points), `matched_records` (order-insensitive), and

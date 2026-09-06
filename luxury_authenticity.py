@@ -74,7 +74,7 @@ class LuxuryAuthenticity(gl.Contract):
             evidence_retrieved = False
             evidence_body = ""
             try:
-                content = gl.nondet.web.get(evidence_url)
+                content = gl.nondet.web.render(evidence_url)
                 evidence_body = self._decode_body(content)[:1200]
                 evidence_retrieved = self._source_retrieved(evidence_url, evidence_body, serial)
             except Exception:
@@ -83,7 +83,7 @@ class LuxuryAuthenticity(gl.Contract):
 
             for url in self._authoritative_urls(serial):
                 try:
-                    content = gl.nondet.web.get(url)
+                    content = gl.nondet.web.render(url)
                     body = self._decode_body(content)[:1200]
                     retrieved = self._source_retrieved(url, body, serial)
                     texts.append(f"[{url}] [{'OK' if retrieved else 'NO_SERIAL'}]\n{body}")
