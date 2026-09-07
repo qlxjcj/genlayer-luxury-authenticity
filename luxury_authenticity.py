@@ -154,6 +154,46 @@ When status is "INCONCLUSIVE", set confidence=0, matched_records=[].
         )
         return gl.eq_principle.prompt_comparative(gather_and_authenticate, principle)
 
+    def _calculate_confidence_score(self, verdict: dict) -> dict:
+        sources = verdict.get("sources", [])
+        evidence_retrieved = verdict.get("evidence_retrieved", False)
+        ai_confidence = verdict.get("confidence", 0)
+        status = verdict.get("status", "INCONCLUSIVE")
+
+        # Source score: 20 points per retrieved source, max 80
+        retrieved_count = sum(1 for s in sources if s.get("retrieved", False))
+        source_score = min(retrieved_count * 20, 80)
+
+        # Evidence score: 20 points if evidence retrieved
+        evidence_score = 20 if evidence_retrieved else 0
+
+        # AI confidence is already 0-100, use as-is
+        ai_score = ai_confidence
+
+        # Overall score: weighted average
+        # Source: 40%, Evidence: 20%, AI: 40%
+        overall_score = int(source_score * 0.4 + evidence_score * 0.2 + ai_score * 0.4)
+
+        # Confidence level
+        if overall_score >= 80:
+            level = "HIGH"
+        elif overall_score >= 50:
+            level = "MEDIUM"
+        elif overall_score >= 20:
+            level = "LOW"
+        else:
+            level = "VERY_LOW"
+
+        return {
+            "overall_score": overall_score,
+            "level": level,
+            "source_score": source_score,
+            "evidence_score": evidence_score,
+            "ai_score": ai_score,
+            "retrieved_sources": retrieved_count,
+            "total_sources": len(sources),
+        }
+
     def _normalize_verdict(self, v: dict) -> dict:
         status = str(v.get("status", "")).upper()
         if status not in self.STATUSES:
@@ -191,6 +231,14 @@ When status is "INCONCLUSIVE", set confidence=0, matched_records=[].
         evidence_url = str(v.get("evidence_url", ""))
         evidence_retrieved = bool(v.get("evidence_retrieved", False))
 
+        # Calculate confidence score
+        confidence_data = self._calculate_confidence_score({
+            "sources": norm_sources,
+            "evidence_retrieved": evidence_retrieved,
+            "confidence": confidence,
+            "status": status,
+        })
+
         return {
             "status": status,
             "confidence": confidence,
@@ -199,6 +247,7 @@ When status is "INCONCLUSIVE", set confidence=0, matched_records=[].
             "evidence_url": evidence_url,
             "evidence_retrieved": evidence_retrieved,
             "reasoning": str(v.get("reasoning", "")),
+            "confidence_score": confidence_data,
         }
 
     @gl.public.write

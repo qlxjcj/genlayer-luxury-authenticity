@@ -47,7 +47,7 @@ h1 { font-size: 22px; }
       <div style="font-size:11px;color:#8f7b84;margin-top:4px;">AI-verified item screening Â· Reusable on-chain records</div>
     </div>
     <div style="display:flex;gap:10px;align-items:center;">
-      <a class="explorer-link" href="https://explorer-bradbury.genlayer.com/address/0xDee8F8624A7d54490BAb0c0dB262E0846152492B" target="_blank">View on Explorer â†—</a>
+      <a class="explorer-link" href="https://explorer-bradbury.genlayer.com/address/0xAe7fb7133f591a0353E609b86681e9F7f1892Daa" target="_blank">View on Explorer →</a>
       <button class="btn btn-outline btn-sm" id="connectBtn">Connect Wallet</button>
     </div>
   </div>
@@ -93,7 +93,7 @@ h1 { font-size: 22px; }
 
 <script src="https://cdn.jsdelivr.net/npm/ethers@5.7/dist/ethers.umd.min.js"></script>
 <script>
-const CONTRACT = '0xDee8F8624A7d54490BAb0c0dB262E0846152492B';
+const CONTRACT = '0xAe7fb7133f591a0353E609b86681e9F7f1892Daa';
 const RPC = 'https://rpc-bradbury.genlayer.com';
 const ABI = [
   'function submit_item(string brand, string model, string serial, string category, string evidence_url)',
@@ -132,12 +132,23 @@ function renderVerdict(jsonStr) {
     const st = (v.status || 'INCONCLUSIVE').toLowerCase();
     const badge = '<span class="tag tag-' + st + '">' + (v.status || '') + '</span>';
     const srcs = v.sources && v.sources.length
-      ? '\nSources:\n  ' + v.sources.map(s => (s.retrieved ? 'âœ“' : 'âœ—') + ' ' + s.url).join('\n  ')
+      ? '\nSources:\n  ' + v.sources.map(s => (s.retrieved ? '✓' : '✗') + ' ' + s.url).join('\n  ')
       : '';
-    const ev = v.evidence_url ? '\nEvidence: ' + (v.evidence_retrieved ? 'âœ“' : 'âœ—') + ' ' + v.evidence_url : '';
+    const ev = v.evidence_url ? '\nEvidence: ' + (v.evidence_retrieved ? '✓' : '✗') + ' ' + v.evidence_url : '';
+    
+    // Confidence score display
+    let scoreDisplay = '';
+    if (v.confidence_score) {
+      const cs = v.confidence_score;
+      scoreDisplay = '\n\nConfidence Score: ' + cs.overall_score + '/100 (' + cs.level + ')' +
+        '\n  Source Score: ' + cs.source_score + '/80 (' + cs.retrieved_sources + '/' + cs.total_sources + ' sources)' +
+        '\n  Evidence Score: ' + cs.evidence_score + '/20' +
+        '\n  AI Score: ' + cs.ai_score + '/100';
+    }
+    
     return badge + ' Confidence: ' + (v.confidence ?? 0) + '/100' +
       '\nMatched records: ' + JSON.stringify(v.matched_records) +
-      srcs + ev +
+      srcs + ev + scoreDisplay +
       '\nReasoning: ' + v.reasoning;
   } catch(e) { return jsonStr; }
 }
