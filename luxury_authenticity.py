@@ -24,7 +24,6 @@ class LuxuryAuthenticity(gl.Contract):
     item_count: u256
 
     STATUSES = ("AUTHENTIC", "COUNTERFEIT", "SUSPICIOUS", "INCONCLUSIVE")
-    # Authoritative authentication / resale registries queried for every check.
     AUTHORITATIVE_SOURCES = (
         "https://www.entrupy.com/verify/",
         "https://www.rebag.com/authenticity/",
@@ -56,9 +55,6 @@ class LuxuryAuthenticity(gl.Contract):
         return [base + serial for base in self.AUTHORITATIVE_SOURCES]
 
     def _source_retrieved(self, url: str, body: str, serial: str) -> bool:
-        # A source only counts as retrieved when the response body actually
-        # references this serial, so a generic landing/error page never counts
-        # as serial-specific authenticity evidence.
         if not body:
             return False
         return serial.upper() in body.upper()
@@ -68,9 +64,6 @@ class LuxuryAuthenticity(gl.Contract):
             sources = []
             texts = []
 
-            # Fetch submitter-provided evidence URL and check it references the
-            # serial, tying the serial to a physical item (photo listing,
-            # marketplace listing, or certificate scan).
             evidence_retrieved = False
             evidence_body = ""
             try:
@@ -105,7 +98,7 @@ does NOT reference this serial, the serial is not tied to a physical item and
 you MUST return status "INCONCLUSIVE".
 
 If NO authoritative source was retrieved, or the retrieved sources do not cover
-this serial, you MUST return status "INCONCLUSIVE" — never report an item as
+this serial, you MUST return status "INCONCLUSIVE" - never report an item as
 authentic without evidence.
 
 BRAND: {brand or "[none provided]"}
@@ -160,12 +153,12 @@ When status is "INCONCLUSIVE", set confidence=0, matched_records=[].
         ai_confidence = verdict.get("confidence", 0)
         status = verdict.get("status", "INCONCLUSIVE")
 
-        # Source score: 20 points per retrieved source, max 80
+        # Source score: 25 points per retrieved source, max 100
         retrieved_count = sum(1 for s in sources if s.get("retrieved", False))
-        source_score = min(retrieved_count * 20, 80)
+        source_score = min(retrieved_count * 25, 100)
 
-        # Evidence score: 20 points if evidence retrieved
-        evidence_score = 20 if evidence_retrieved else 0
+        # Evidence score: 100 if evidence retrieved
+        evidence_score = 100 if evidence_retrieved else 0
 
         # AI confidence is already 0-100, use as-is
         ai_score = ai_confidence
@@ -288,13 +281,6 @@ When status is "INCONCLUSIVE", set confidence=0, matched_records=[].
             self._authenticate(item["brand"], item["model"], item["serial"], item["category"], item["evidence_url"])
         )
 
-        # Evidence requirement: the serial must be tied to a physical item via
-        # the submitter-provided evidence URL. If the evidence was not retrieved
-        # (fetch failed or body doesn't reference this serial), force INCONCLUSIVE.
-        # Hard source requirement: if no authoritative source was successfully
-        # retrieved for this serial, force INCONCLUSIVE regardless of what the
-        # LLM returned. An AUTHENTIC verdict must rest on serial-specific
-        # evidence, not on generic page responses or empty results.
         if not verdict.get("evidence_retrieved") or not any(s.get("retrieved") for s in verdict.get("sources", [])):
             forced = {
                 "status": "INCONCLUSIVE",
@@ -307,10 +293,6 @@ When status is "INCONCLUSIVE", set confidence=0, matched_records=[].
             }
             verdict = self._normalize_verdict(forced)
 
-        # Reusable record is keyed by normalized serial. Guard against an unrelated
-        # caller (or a serial collision with a different brand) silently replacing
-        # a settled record: only its original requester may update it, and anyone
-        # may improve an INCONCLUSIVE one.
         key = item["serial"]
         existing = json.loads(self.records.get(key, "{}"))
         if existing:
